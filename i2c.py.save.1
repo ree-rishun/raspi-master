@@ -1,0 +1,87 @@
+# import
+import smbus
+import sqlite3
+import datetime
+import sys
+
+#define
+SLAVE_RASPI1 = 0x11		# スレーブ1（RaspberryPi　ルート取得用）
+SLAVE_RASPI2 = 0x22		# スレーブ2（RaspberryPi　送受信用）
+SLAVE_ARDUINO1 = 0x33	# スレーブ3（ArduinoUNO　モータ制御用）
+SLAVE_ARDUINO2 = 0x44	# スレーブ4（ArduinoUNO　センサー値取得用）
+SLAVE_ARDUINO3 = 0x55	# スレーブ5（Arduino nano　荷物受け取り用 上段）
+SLAVE_ARDUINO3 = 0x66	# スレーブ6（Arduino nano　荷物受け取り用 下段）
+
+# table writer
+def table_wrt():
+
+    # switch setup
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    # connect DB
+    conn = sqlite3.connect('sensor.db')
+    c = conn.cursor()
+
+    # count variable
+    i = 0
+
+    # create table
+    c.execute('select count(*) from sqlite_master where type="table" and name="data"')
+    if c.fetchone() == (0,):
+        c.execute('create table data(time text)')
+
+    try:
+        while True:
+            if GPIO.input(SWITCH_PIN) == 1:
+                while GPIO.input(SWITCH_PIN) == 1:
+                   continue
+                # get date and time
+                dt_now = datetime.datetime.now()
+
+                sql = 'insert into data values (?)'
+                params = (dt_now.strftime('%Y/%m/%d %H:%M:%S'),)
+
+                # insert table
+                c.execute(sql, params)
+                i += 1
+                print("pushed:", i, "time")
+    except KeyboardInterrupt:
+        # data commit
+        conn.commit()
+
+        # fin
+        conn.close()
+        GPIO.cleanup()
+        sys.exit(0)
+
+    # data commit
+    conn.commit()
+
+    # fin
+    conn.close()
+    GPIO.cleanup()
+
+def main():
+	i2c = smbus.SMBus(1)
+
+	motor_power = [0x11,0x22]
+
+	while True:
+		try:
+			# センサ値の取得
+			# motor_power = i2c.read_i2c_block_data(SLAVE_ARDUINO2, 1, 2)
+
+			# モータへの出力値の取得
+			# motor_power = i2c.read_i2c_block_data(SLAVE_RASPI1, 1, 2)
+
+			# モータへの出力
+			i2c.write_i2c_block_data(SLAVE_ARDUINO1, 0, motor_power)
+
+			# センサ値のDB格納
+
+		except KeyboardInterrupt:
+			# 終了時処理
+			break
+
+main()
